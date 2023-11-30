@@ -1,3 +1,4 @@
+import functools
 from datasets import load_dataset, load_metric
 from transformers import AutoTokenizer
 from transformers import AutoModelForMultipleChoice, TrainingArguments, Trainer
@@ -5,12 +6,14 @@ from dataclasses import dataclass
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase, PaddingStrategy
 from typing import Optional, Union
 import torch
+import numpy as np
+from data_loader_utils import story_preprocess_function
     
 
 if __name__ == "__main__":
     """Note: I am using the OrderTrain dataset for example, but we should decide which one to use [Cloze, Order]"""
     model_checkpoint = "bert-base-uncased"
-    batch_size=4
+    batch_size=32
 
 
     dataset = load_dataset("sled-umich/TRIP")
@@ -18,23 +21,14 @@ if __name__ == "__main__":
     # eval_set = dataset['OrderDev']
     # test_set = dataset['OrderTest']
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
-    def story_preprocess_function(examples):
-        """This preprocess function combines all the sentences together and outputs the story that is plausible"""
-        story_1 = [' '.join(stories[0]['sentences']) for stories in examples['stories']]
-        story_2 = [' '.join(stories[1]['sentences']) for stories in examples['stories']]
-        num_data = len(examples['stories'])
-        tokenized_story = tokenizer(story_1 + story_2)
-        return {k: [[v[i], v[i+num_data]] for i in range(num_data)] for k, v in tokenized_story.items()}
 
         
     "example of encoding the dataset"
-    tokenized_story = story_preprocess_function(dataset['OrderTrain'][:5])
+    tokenized_story = story_preprocess_function(dataset['OrderTrain'][:5], tokenizer=tokenizer)
     print(tokenizer.decode(tokenized_story['input_ids'][0][0]))
     
 
-
-
-    encoded_dataset = dataset.map(story_preprocess_function, batched=True)
+    encoded_dataset = dataset.map(functools.partial(story_preprocess_function, tokenizer=tokenizer), batched=True)
 
     model = AutoModelForMultipleChoice.from_pretrained(model_checkpoint)
     model_name = model_checkpoint.split("/")[-1]
@@ -44,7 +38,7 @@ if __name__ == "__main__":
         learning_rate=5e-5,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        num_train_epochs=3,
+        num_train_epochs=6,
         weight_decay=0.01,
         push_to_hub=True,
     )
@@ -82,6 +76,22 @@ if __name__ == "__main__":
             # Add back labels
             batch["labels"] = torch.tensor(labels, dtype=torch.int64)
             return batch
-    accepted_keys = ["input_ids", "attention_mask", "input_ids", "attention_mask", "label"]
-    features = [{k: v for k, v in encoded_dataset['OrderTrain'][i].items() if k in accepted_keys} for i in range(10)]
-    batch = StoryDataCollator(tokenizer)(features)
+    accepted_keys = ["input_ids", "attention_mask", "input_ids", "label"]
+    # features = [{k: v for k, v in encoded_dataset['OrderTrain'][i].items() if k in accepted_keys} for i in range(10)]
+    # batch = StoryDataCollator(tokenizer)(features)
+
+    def compute_metrics(eval_predictions):
+        predictions, label_ids = eval_predictions
+        preds = np.argmax(predictions, axis=1)
+        return {"accuracy": (preds == label_ids).astype(np.float32).mean().item()}
+
+    trainer = Trainer(
+        model,
+        args,
+        train_dataset=encoded_dataset["ClozeTrain"],
+        eval_dataset=encoded_dataset["ClozeTest"],
+        tokenizer=tokenizer,
+        data_collator=StoryDataCollator(tokenizer),
+        compute_metrics=compute_metrics,
+    )
+    trainer.train()

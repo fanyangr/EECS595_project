@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase, PaddingStrategy
 from typing import Optional, Union
 import torch
+import torch.nn as nn
 import numpy as np
     
 
@@ -13,7 +14,7 @@ if __name__ == "__main__":
     It seems like OrderTrain set is corrupeted, which means it doesn't have the correct label for conflict sentences
     """
     model_checkpoint = "bert-base-uncased"
-    batch_size=4
+    batch_size=32
 
 
     dataset = load_dataset("sled-umich/TRIP")
@@ -74,7 +75,7 @@ if __name__ == "__main__":
         learning_rate=5e-5,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        num_train_epochs=3,
+        num_train_epochs=6,
         weight_decay=0.01,
         push_to_hub=True,
     )
@@ -157,6 +158,20 @@ if __name__ == "__main__":
 
 
     accepted_keys = ["input_ids", "attention_mask", "input_ids", "attention_mask", 'label', "confl_pairs"]
-    features = [{k: v for k, v in encoded_dataset['ClozeTrain'][i].items() if k in accepted_keys} for i in range(10)]
+    features = [{k: v for k, v in encoded_dataset['ClozeTrain'][i].items() if k in accepted_keys} for i in range(200)]
     batch = SentenceDataCollator(tokenizer)(features)
     print(batch)
+    def compute_metrics(eval_predictions):
+        predictions, label_ids = eval_predictions
+        preds = np.argmax(predictions, axis=1)
+        return {"accuracy": (preds == label_ids).astype(np.float32).mean().item()}
+    trainer = Trainer(
+        model,
+        args,
+        train_dataset=encoded_dataset["ClozeTrain"],
+        eval_dataset=encoded_dataset["ClozeTest"],
+        tokenizer=tokenizer,
+        data_collator=SentenceDataCollator(tokenizer),
+        compute_metrics=compute_metrics,
+    )
+    trainer.train()
