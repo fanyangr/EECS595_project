@@ -54,7 +54,8 @@ def sentence_preprocess_function(examples, tokenizer):
                         assert j >= 10
                     sentence_labels.append(j)
     tokenized_results['arranged_confl_labels'] = sentence_labels
-    tokenized_results['token_type_ids'] = arranged_feature['token_type_ids']
+    if 'token_type_ids' in tokenized_results.keys():
+        tokenized_results['token_type_ids'] = arranged_feature['token_type_ids']
     tokenized_results['input_ids'] = arranged_feature['input_ids']
     tokenized_results['attention_mask'] = arranged_feature['attention_mask']
     return tokenized_results

@@ -35,14 +35,14 @@ if __name__ == "__main__":
     model = AutoModelForMultipleChoice.from_pretrained(model_checkpoint)
     model_name = model_checkpoint.split("/")[-1]
     args = TrainingArguments(
-        f"{model_name}-finetuned-swag",
+        f"{model_name}-finetuned-stories",
         evaluation_strategy = "epoch",
         learning_rate=5e-5,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         num_train_epochs=6,
         weight_decay=0.01,
-        push_to_hub=True,
+        push_to_hub=False,
     )
 
     @dataclass

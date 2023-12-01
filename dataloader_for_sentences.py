@@ -14,6 +14,7 @@ if __name__ == "__main__":
     """Note: I am using the ClozeTrain dataset for example, but we should decide which one to use [Cloze, Order]
     It seems like OrderTrain set is corrupeted, which means it doesn't have the correct label for conflict sentences
     """
+    # model_checkpoint = "roberta-base"
     model_checkpoint = "bert-base-uncased"
     batch_size=12
 
@@ -36,28 +37,30 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
     
     "example of encoding the dataset"
-    # tokenized_story = sentence_preprocess_function(dataset['ClozeTrain'][:4], tokenizer=tokenizer)
-    # print(tokenizer.decode(tokenized_story['input_ids'][0][0][0]))
+    tokenized_story = sentence_preprocess_function(dataset['ClozeTrain'][4:10], tokenizer=tokenizer)
+    print(tokenizer.decode(tokenized_story['input_ids'][0][0][0]))
     
 
 
 
     encoded_dataset = dataset.map(functools.partial(sentence_preprocess_function, tokenizer=tokenizer), batched=True)
-    encoded_dataset = encoded_dataset.remove_columns('token_type_ids')
+    if 'token_type_ids' in encoded_dataset.keys():
+        encoded_dataset = encoded_dataset.remove_columns('token_type_ids')
     # encoded_dataset = encoded_dataset.rename_column('t','label')
 
 
     model = AutoModelForMultipleChoice.from_pretrained(model_checkpoint)
     model_name = model_checkpoint.split("/")[-1]
     args = TrainingArguments(
-        f"{model_name}-finetuned-swag",
+        f"{model_name}-finetuned-confl_sentence",
         evaluation_strategy = "epoch",
-        learning_rate=5e-5,
+        learning_rate=3e-5,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        num_train_epochs=6,
+        num_train_epochs=10,
         weight_decay=0.01,
-        push_to_hub=True,
+        push_to_hub=False,
+        lr_scheduler_type='linear',
     )
 
     @dataclass
@@ -99,9 +102,9 @@ if __name__ == "__main__":
         
     encoded_dataset = encoded_dataset.remove_columns('label')
     encoded_dataset = encoded_dataset.rename_column('arranged_confl_labels','label')
-    accepted_keys = ["input_ids", "attention_mask", 'token_type_ids', 'label']
-    features = [{k: v for k, v in encoded_dataset['ClozeTrain'][i].items() if k in accepted_keys} for i in range(len(encoded_dataset['ClozeTrain']))]
-    batch = SentenceDataCollator(tokenizer)(features)
+    # accepted_keys = ["input_ids", "attention_mask", 'label']
+    # features = [{k: v for k, v in encoded_dataset['ClozeTrain'][i].items() if k in accepted_keys} for i in range(len(encoded_dataset['ClozeTrain']))]
+    # batch = SentenceDataCollator(tokenizer)(features)
     # print(batch)
     def compute_metrics(eval_predictions):
         predictions, label_ids = eval_predictions
