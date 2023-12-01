@@ -17,6 +17,8 @@ if __name__ == "__main__":
 
 
     dataset = load_dataset("sled-umich/TRIP")
+    dataset.cleanup_cache_files()
+
     # training_set = dataset['OrderTrain']
     # eval_set = dataset['OrderDev']
     # test_set = dataset['OrderTest']
