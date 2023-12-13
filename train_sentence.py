@@ -57,7 +57,7 @@ if __name__ == "__main__":
         learning_rate=3e-5,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        num_train_epochs=10,
+        num_train_epochs=8,
         weight_decay=0.01,
         push_to_hub=False,
         lr_scheduler_type='linear',
@@ -107,9 +107,17 @@ if __name__ == "__main__":
     # batch = SentenceDataCollator(tokenizer)(features)
     # print(batch)
     def compute_metrics(eval_predictions):
+        " given the gt sotry label, predict the conflict sentences"
         predictions, label_ids = eval_predictions
-        preds = np.argmax(predictions, axis=1)
-        return {"accuracy": (preds == label_ids).astype(np.float32).mean().item()}
+        # preds = np.argmax(predictions, axis=1)
+        prediction_1 = predictions[:, :10]
+        prediction_2 = predictions[:, 10:20]
+        preds_1 = np.argmax(prediction_1, axis=1)
+        preds_2 = np.argmax(prediction_2, axis=1) + 10
+        accuracy_1 = (preds_1 == label_ids).astype(np.float32).mean().item()
+        accuracy_2 = (preds_2 == label_ids).astype(np.float32).mean().item()
+        return {"accuracy": accuracy_1 + accuracy_2}
+        # return {"accuracy": (preds == label_ids).astype(np.float32).mean().item()}
     trainer = Trainer(
         model,
         args,
